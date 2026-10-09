@@ -10,6 +10,26 @@
 
 Debug 构建使用开发签名，不同构建环境的签名可能不同。若系统提示“与已安装应用不兼容”，不能直接覆盖旧版；需要先卸载旧 Debug 版再安装。卸载会删除应用本地缓存及授权，下次需重新选择权限；Health Connect 中的来源记录不会因此删除。正式生产签名与持续升级机制不在本版本范围内。
 
+## 已授权，但近 7 天全部缺失
+
+“Health Connect 可用”“已授权 4/4”和最近成功同步时间，说明本应用已获读取权限并完成读取流程；不能据此确认 Garmin 已写入数据。先在系统中检查来源记录。
+
+| 应用 | 所需权限与职责 |
+| --- | --- |
+| Garmin Connect | 向 Health Connect **写入**用户选择的数据 |
+| Garmin AI Coach | 从 Health Connect **读取**用户选择的数据 |
+
+Garmin 官方说明：Health Connect 分享功能适用于 Android 14 及以上，是从 Garmin 向 Health Connect 的单向传输；启用后，每次设备成功同步都会发送数据。[官方说明](https://support.garmin.com/en-GB/?faq=JToBEy0jfe6pIygark2Ui5)。
+
+1. 在 Garmin AI Coach 点“Health Connect 设置”，进入“应用权限”，找到 **Garmin Connect**，检查步数的**写入**权限；先只开放要验证的类型。本应用的四类读取权限不代替来源应用的写入权限。[Google 权限说明](https://support.google.com/android/answer/12201230?hl=zh-Hans)
+2. 打开已安装的官方 Garmin Connect，手动同步手表，等待该应用显示同步完成，再查看今日步数是否存在。
+3. 返回 Health Connect，进入“数据和访问权限 → 活动 → 步数 → 查看所有条目”，选择今天，确认有记录且来源为 Garmin Connect。菜单翻译可能随系统版本不同。[Google 查看记录说明](https://support.google.com/android/answer/12201872?hl=zh-Hans)
+4. 系统中确认有记录后，回到 Garmin AI Coach 点“手动刷新”。步数验证成功后再按需检查心率、距离、睡眠；不保证启用分享会补齐过去七天。
+
+若应用权限列表没有 Garmin Connect，先检查官方应用更新，并在 Garmin Connect 的设置中查看是否提供 Health Connect 连接入口。部分应用需先从自身启动连接；不要将 Apple Health 的菜单步骤套用到 Android。[Google 关联应用说明](https://support.google.com/android/answer/12201227?hl=zh-Hans)
+
+排查结果分两种：Health Connect 没有来源记录时，继续处理 Garmin 官方分享与同步；Health Connect 已有当前日期的来源记录，而本应用仍缺失时，再检查本应用读取。记录有无、日期和来源应用名称即可，不需要上传健康数值。
+
 ## 先只授权步数
 
 1. 首次打开应用不应自动弹出系统授权。查看组件检测结果。

@@ -12,5 +12,8 @@
 | [Health Connect data types](https://developer.android.com/health-and-fitness/health-connect/data-types) | 四种 Record 与对应只读权限 |
 | [AGP 8.13 release notes](https://developer.android.com/build/releases/agp-8-13-0-release-notes) | AGP 8.13.2 / Gradle 8.13 / API 36 / JDK 17 的兼容工具链 |
 | [Health Connect test cases](https://developer.android.com/health-and-fitness/health-connect/test/test-cases) | 设备授权、拒绝、撤销、不可用和读取失败验收 |
+| [Garmin 分享到 Health Connect](https://support.garmin.com/en-GB/?faq=JToBEy0jfe6pIygark2Ui5) | 官方功能要求 Android 14+；单向写入，启用后随成功设备同步发送数据；读取授权不代表来源已写入 |
+| [Google 关联与权限](https://support.google.com/android/answer/12201227?hl=zh-Hans) | 来源应用与本应用分别授权；部分来源需要先从自身启动连接，不虚构 Garmin 菜单路径 |
+| [Google 查找数据](https://support.google.com/android/answer/12201872?hl=zh-Hans) | 按类别和类型查看所有条目、日期及来源，先区分上游空数据与下游读取异常 |
 
 官方入门页当前示例推荐 alpha SDK，V0.1 所需四类型与授权/聚合功能已存在于 stable 1.1.0，因此选用稳定版。官方 sources JAR 核对了 `ReadRecordsRequest` 参数、聚合常量、Metadata 及设置 action，基础测试使用官方 `connect-testing` 的 FakeHealthConnectClient（测试依赖，未打入生产业务）。
