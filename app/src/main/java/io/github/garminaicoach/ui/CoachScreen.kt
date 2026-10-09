@@ -23,8 +23,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private val Stamp = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
-private fun stamp(value: Instant?) = value?.let(Stamp::format) ?: "尚未同步"
+private val Stamp = DateTimeFormatter.ofPattern("MM-dd HH:mm")
+private fun stamp(value: Instant?) = value?.let { Stamp.withZone(ZoneId.systemDefault()).format(it) } ?: "尚未同步"
 
 fun displayValue(metric: Metric, value: Double?): String {
     if (value == null) return "—"
@@ -36,6 +36,7 @@ fun displayValue(metric: Metric, value: Double?): String {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CoachScreen(
     state: CoachUiState,
@@ -73,15 +74,15 @@ fun CoachScreen(
                                 null -> "正在检查 Health Connect"
                             }, fontWeight = FontWeight.SemiBold)
                             Text(when (state.availability) {
-                                Availability.AVAILABLE -> "已授权 ${state.granted.size}/4 类只读数据。数据是否存在取决于来源应用是否写入。"
+                                Availability.AVAILABLE -> if (state.accessVerified) "已授权 ${state.granted.size}/4 类只读数据。数据是否存在取决于来源应用是否写入。" else "尚未确认只读权限。请手动刷新，确认后才能申请或读取数据。"
                                 Availability.UPDATE_REQUIRED -> "请先安装或更新官方组件，再返回本应用刷新。"
                                 Availability.UNAVAILABLE -> "请检查系统组件和 Google Play 服务；部分 ColorOS 地区版本或工作资料不支持。"
                                 null -> "检查后才能申请权限和读取数据。"
                             }, style = MaterialTheme.typography.bodyMedium)
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Button(onClick = onRefresh, enabled = !state.busy, modifier = Modifier.testTag("refresh")) { Text(if (state.busy) "检查 / 同步中…" else "手动刷新") }
                                 if (state.availability == Availability.AVAILABLE) {
-                                    OutlinedButton(onClick = { permissionsPage = true }, enabled = !state.busy) { Text("数据权限") }
+                                    OutlinedButton(onClick = { permissionsPage = true }, enabled = !state.busy, modifier = Modifier.testTag("open-permissions")) { Text("数据权限") }
                                 }
                             }
                             when (state.availability) {
@@ -117,7 +118,7 @@ fun CoachScreen(
                 item {
                     Text("Garmin 数据只有被来源应用写入 Health Connect 后才能读取。此应用不登录 Garmin Connect，不要求 Garmin 密码。", style = MaterialTheme.typography.bodySmall)
                     Text("AI 尚未启用 · 不上传健康数据 · 不提供医学诊断", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         TextButton(onClick = onPrivacy) { Text("隐私与权限说明") }
                         TextButton(onClick = { clearDialog = true }, enabled = !state.busy) { Text("清除本地数据") }
                     }
@@ -134,6 +135,7 @@ fun CoachScreen(
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable private fun MetricCard(metric: Metric, state: CoachUiState) {
     val authorized = state.accessVerified && metric in state.granted
     val status = state.snapshot.statuses.firstOrNull { it.metric == metric }
@@ -145,8 +147,8 @@ fun CoachScreen(
     val hasCache = days.isNotEmpty()
     OutlinedCard(Modifier.fillMaxWidth().testTag("metric-${metric.name}")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(if (metric == Metric.HEART_RATE) "心率 · 日均" else if (metric == Metric.SLEEP) "睡眠 · 日内累计" else metric.label, style = MaterialTheme.typography.titleMedium)
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (metric == Metric.HEART_RATE) "心率 · 日均" else if (metric == Metric.SLEEP) "睡眠 · 日内累计" else metric.label, style = MaterialTheme.typography.titleMedium, modifier = Modifier.testTag("title-${metric.name}"))
                 Text(when {
                     !state.accessVerified -> "等待权限检查"
                     !authorized -> "未授权 / 不可用"
@@ -156,14 +158,12 @@ fun CoachScreen(
                     status?.phase == SyncPhase.SUCCESS && current == null -> "今日无数据"
                     status?.phase == SyncPhase.SUCCESS -> "已同步"
                     else -> "待刷新"
-                }, style = MaterialTheme.typography.labelSmall)
+                }, style = MaterialTheme.typography.labelSmall, modifier = Modifier.testTag("status-${metric.name}"))
             }
             Text("${displayValue(metric, current)} ${metric.unit}", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold, modifier = Modifier.testTag("value-${metric.name}"))
             if (authorized && hasCache) {
                 Trend(values)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    dates.forEach { Text(it.format(DateTimeFormatter.ofPattern("MM/dd")), style = MaterialTheme.typography.labelSmall) }
-                }
+                Text("${dates.first().format(DateTimeFormatter.ofPattern("MM/dd"))} → ${dates.last().format(DateTimeFormatter.ofPattern("MM/dd"))}", style = MaterialTheme.typography.labelSmall)
                 // Exact daily values stay accessible alongside the chart; missing points are explicit.
                 Text(dates.zip(values).joinToString(" · ") { (date, value) -> "${date.dayOfMonth}日 ${if (value == null) "缺失" else displayValue(metric, value)}" }, style = MaterialTheme.typography.bodySmall)
                 val known = values.filterNotNull()
@@ -210,25 +210,28 @@ fun CoachScreen(
 
 @Composable private fun PermissionScreen(state: CoachUiState, onBack: () -> Unit, onRequest: (Set<Metric>) -> Unit, onSettings: () -> Unit, onPrivacy: () -> Unit) {
     var selectedNames by rememberSaveable { mutableStateOf(emptyList<String>()) }
-    val requested = selectedNames.map(Metric::valueOf).toSet() - state.granted
+    val confirmedGrants = if (state.accessVerified) state.granted else emptySet()
+    val canRequest = state.accessVerified && !state.busy && state.availability == Availability.AVAILABLE
+    val requested = if (state.accessVerified) selectedNames.map(Metric::valueOf).toSet() - confirmedGrants else emptySet()
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp), modifier = Modifier.testTag("permissions")) {
         item { TextButton(onClick = onBack) { Text("返回数据概览") } }
         item {
             Text("选择要读取的数据", style = MaterialTheme.typography.headlineMedium)
             Text("全部为只读权限。默认不勾选，可只选一种。我们仅在本机保存和统计，不申请写入、后台读取或历史数据权限。", modifier = Modifier.padding(top = 12.dp))
+            if (!state.accessVerified) Text("等待权限检查。请返回数据概览刷新后重试。", modifier = Modifier.padding(top = 8.dp))
         }
         items(Metric.entries, key = { it.name }) { metric ->
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(
-                        checked = metric in state.granted || metric.name in selectedNames,
-                        enabled = metric !in state.granted && !state.busy,
+                        checked = state.accessVerified && (metric in confirmedGrants || metric.name in selectedNames),
+                        enabled = canRequest && metric !in confirmedGrants,
                         onCheckedChange = { checked -> selectedNames = if (checked) selectedNames + metric.name else selectedNames - metric.name },
                         modifier = Modifier.testTag("select-${metric.name}"),
                     )
                     Column {
                         Text(metric.label, fontWeight = FontWeight.SemiBold)
-                        Text(if (metric in state.granted) "已授权；可在系统设置撤销" else when (metric) {
+                        Text(if (!state.accessVerified) "等待确认系统权限" else if (metric in confirmedGrants) "已授权；可在系统设置撤销" else when (metric) {
                             Metric.STEPS -> "用于步数展示与近 7 天趋势"
                             Metric.HEART_RATE -> "用于心率记录与每日平均值"
                             Metric.DISTANCE -> "用于距离展示与近 7 天趋势"
@@ -239,7 +242,7 @@ fun CoachScreen(
             }
         }
         item {
-            Button(onClick = { onRequest(requested) }, enabled = requested.isNotEmpty() && !state.busy && state.availability == Availability.AVAILABLE, modifier = Modifier.fillMaxWidth().testTag("request-permissions")) { Text("申请所选 ${requested.size} 类权限") }
+            Button(onClick = { onRequest(requested) }, enabled = requested.isNotEmpty() && canRequest, modifier = Modifier.fillMaxWidth().testTag("request-permissions")) { Text("申请所选 ${requested.size} 类权限") }
             TextButton(onClick = onSettings) { Text("管理或撤销系统权限") }
             TextButton(onClick = onPrivacy) { Text("查看完整隐私与权限说明") }
             state.message?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

@@ -12,7 +12,7 @@ import io.github.garminaicoach.domain.*
 import java.time.Instant
 import java.time.LocalDate
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import org.json.JSONArray
 
 @Entity(tableName = "health_records")
@@ -50,11 +50,9 @@ data class StatusEntity(
 @Dao
 interface HealthDao {
     @Query("SELECT * FROM health_records ORDER BY endMillis DESC")
-    fun observeRecords(): Flow<List<RecordEntity>>
+    suspend fun records(): List<RecordEntity>
     @Query("SELECT * FROM daily_values ORDER BY date")
-    fun observeDays(): Flow<List<DailyEntity>>
-    @Query("SELECT * FROM sync_status")
-    fun observeStatuses(): Flow<List<StatusEntity>>
+    suspend fun days(): List<DailyEntity>
     @Query("SELECT * FROM sync_status")
     suspend fun statuses(): List<StatusEntity>
     @Query("DELETE FROM health_records WHERE metric = :metric")
@@ -77,10 +75,18 @@ abstract class CoachDatabase : RoomDatabase() { abstract fun healthDao(): Health
 
 class RoomHealthStore(private val database: CoachDatabase) : HealthStore {
     private val dao = database.healthDao()
-    override fun observe(): Flow<LocalSnapshot> = combine(
-        dao.observeRecords(), dao.observeDays(), dao.observeStatuses()
-    ) { records, days, statuses ->
-        LocalSnapshot(records.map { it.toModel() }, days.map { it.toModel() }, statuses.map { it.toModel() })
+    override fun observe(): Flow<LocalSnapshot> = database.invalidationTracker.createFlow(
+        "health_records", "daily_values", "sync_status"
+    ).map {
+        // Combining independent table flows can expose different committed versions.
+        // One read transaction keeps records, summaries and their status consistent.
+        database.withTransaction {
+            LocalSnapshot(
+                dao.records().map { it.toModel() },
+                dao.days().map { it.toModel() },
+                dao.statuses().map { it.toModel() },
+            )
+        }
     }
     override suspend fun statuses() = dao.statuses().map { it.toModel() }
     override suspend fun replace(metric: Metric, snapshot: MetricSnapshot, status: SyncStatus) = database.withTransaction {

@@ -4,7 +4,10 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import io.github.garminaicoach.data.local.*
 import io.github.garminaicoach.domain.*
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import java.time.*
 import org.junit.*
@@ -54,5 +57,50 @@ class RoomStoreTest {
         assertTrue(store.observe().first().days.isEmpty())
         store.clear()
         assertTrue(store.statuses().isEmpty())
+    }
+    @Test fun liveSnapshotsStayConsistentAcrossReplacementRevocationAndClear() = runTest {
+        val emitted = Channel<LocalSnapshot>(Channel.UNLIMITED)
+        backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            store.observe().collect { emitted.send(it) }
+        }
+        var previous = LocalSnapshot()
+        assertEquals(previous, emitted.receive())
+
+        suspend fun awaitCommittedSnapshot(expected: LocalSnapshot) {
+            while (true) {
+                val actual = emitted.receive()
+                assertTrue(
+                    "Observed a mixture of snapshots: $actual",
+                    actual == previous || actual == expected,
+                )
+                if (actual == expected) {
+                    previous = expected
+                    return
+                }
+            }
+        }
+
+        repeat(8) { cycle ->
+            // Refresh both empty and populated caches while the same collector is active.
+            repeat(2) { refresh ->
+                val generation = cycle * 2 + refresh + 1
+                val raw = record(value = generation.toDouble()).let {
+                    it.copy(modified = it.modified.plusSeconds(generation.toLong()))
+                }
+                val day = DailyValue(
+                    Metric.STEPS, LocalDate.parse("2026-10-09"), raw.value,
+                    setOf(raw.origin), "UTC", raw.modified,
+                )
+                val status = SyncStatus(Metric.STEPS, SyncPhase.SUCCESS, succeededAt = raw.modified)
+                store.replace(Metric.STEPS, MetricSnapshot(listOf(raw), listOf(day)), status)
+                awaitCommittedSnapshot(LocalSnapshot(listOf(raw), listOf(day), listOf(status)))
+            }
+
+            val revoked = SyncStatus(Metric.STEPS, SyncPhase.PERMISSION_REQUIRED)
+            store.remove(Metric.STEPS, revoked)
+            awaitCommittedSnapshot(LocalSnapshot(statuses = listOf(revoked)))
+            store.clear()
+            awaitCommittedSnapshot(LocalSnapshot())
+        }
     }
 }

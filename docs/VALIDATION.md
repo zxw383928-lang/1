@@ -1,4 +1,4 @@
-# V0.1 编译与验收记录
+# V0.1.1 编译与验收记录
 
 日期：2026-10-09。真实 ColorOS 16 手机未连接到开发环境；模拟器结果不能替代 Garmin 来源数据和 ColorOS 真机验收。
 
@@ -10,15 +10,15 @@
 ./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest --console=plain
 ```
 
-结果：**BUILD SUCCESSFUL**。24 个基础测试通过，0 failures / errors / skipped。
+结果：**BUILD SUCCESSFUL**。29 个基础测试通过，0 failures / errors / skipped。
 
 | 测试 | 数量 | 覆盖 |
 | --- | ---: | --- |
 | DomainTest | 5 | 夏令时 23 小时日、午夜空窗口、同 ID 更新与跨来源、缺失/零区分、空 ID 拒绝 |
 | RepositoryTest | 8 | 最小授权、撤销清除、失败保留缓存与隔离、读中撤销、成功空结果删除旧记录、取消传播、不可用、中断恢复 |
 | HealthConnectSourceTest | 5 | 官方 FakeHealthConnectClient 的 1,001 条分页、聚合取值、缺失、权限阻断、不可用、心率/距离/睡眠 payload 和单位 |
-| RoomStoreTest | 3 | 真正 Room / SQLite 的重复刷新、更新、无效快照保护、撤销、清除和空值持久化 |
-| ViewModelTest | 3 | 权限检查失败隐藏缓存、授权回调队列、进入后台隐藏健康值 |
+| RoomStoreTest | 4 | 真正 Room / SQLite 的重复刷新、更新、无效快照保护、撤销、清除、空值持久化及持续观察事务一致性 |
+| ViewModelTest | 7 | 权限检查失败隐藏缓存、授权回调队列、后台回调不可恢复显示、前台前授权回调、清除期间排队检查、刷新期间撤权后返回 |
 
 Room 测试使用 Robolectric API 35；Health Connect Fake 测试使用 API 28。测试数据只存在于 test 源集，未进入正式业务。基础测试不证明真实厂商组件或来源应用的行为。
 
@@ -28,18 +28,22 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`；minSdk 28、targetSdk 
 
 本机准备过程中补齐 SDK/JDK、配置代理 CA 信任，并重新下载且核验了 Robolectric 测试依赖的 SHA-512。环境配置未提交到项目；没有关闭 TLS 或依赖完整性检查。
 
-GitHub Actions 云端也已通过独立编译、24 项基础测试和 Lint：[运行记录](https://github.com/zxw383928-lang/1/actions/runs/37883203265)。SDK 安装 Action 已显式指定 `platform-tools`，避免默认请求已停用的 `tools` 包。
+V0.1.0 基线的 GitHub Actions 云端也已通过独立编译、24 项基础测试和 Lint：[运行记录](https://github.com/zxw383928-lang/1/actions/runs/37883203265)。SDK 安装 Action 已显式指定 `platform-tools`，避免默认请求已停用的 `tools` 包。
 
 ## 设备验证进度
 
 本机没有 KVM；Android 16 / API 36 Google APIs x86_64 软件模拟器启动过程中出现系统进程 `DeadSystemException`，未完成安装验收，已停止该模拟器。它不是已通过的设备验证。
 
-**Android 16 / API 36 云端设备验证通过**：[运行记录](https://github.com/zxw383928-lang/1/actions/runs/37883310191)。在带 KVM 的 Google APIs x86_64 模拟器上实际安装 APK，三项 instrumentation 测试全部通过：
+**V0.1.0 基线 Android 16 / API 36 云端设备验证通过**：[运行记录](https://github.com/zxw383928-lang/1/actions/runs/37883310191)。在带 KVM 的 Google APIs x86_64 模拟器上实际安装 APK，三项 instrumentation 测试全部通过：
 
 - `MainActivitySmokeTest` 启动真实应用，确认官方 Health Connect 可用性检查完成、Room 初始化成功，并打开默认不选择任何类型的权限页面。
 - `CoachUiTest` 确认仅勾步数时回调只请求步数；不可用状态有解释，缺失值显示 `—`。
 
-设备测试没有注入用户健康数据；两项纯 UI 测试使用明确的测试状态，真实 MainActivity 测试使用正式数据源。系统授权弹窗的完整交互、真实 Garmin 写入记录的读取和 ColorOS 厂商行为，仍需下表的真机验收，不能由这三项测试替代。
+设备测试没有注入用户健康数据；两项纯 UI 测试使用明确的测试状态，真实 MainActivity 测试使用正式数据源。系统授权弹窗的完整交互、真实 Garmin 写入记录的读取和 ColorOS 厂商行为，仍需下表的真机验收，不能由这些测试替代。
+
+V0.1.1 共五项 instrumentation 测试：上述三项，加上权限状态失效时禁用申请控件、320dp 窄屏 / 两倍字体下布局与滚动测试。当前版本的云端运行记录见[对应 Release](https://github.com/zxw383928-lang/1/releases/tag/v0.1.1)。发布工作流校验基础测试、设备测试均成功且 `head_sha` 与版本 tag 相同，然后使用设备测试实际安装的 APK 发布；不混用旧版本报告。
+
+具体安装、首次最小授权、撤权和恢复操作见 [ColorOS 16 真机操作清单](DEVICE_ACCEPTANCE.md)。
 
 ## ColorOS 16 真机验收步骤
 

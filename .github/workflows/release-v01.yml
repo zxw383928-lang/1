@@ -1,6 +1,20 @@
 name: Publish verified V0.1 artifacts
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag tested by both workflows
+        required: true
+        type: string
+        default: v0.1.1
+      build_run:
+        description: Successful Android V0.1 workflow run ID
+        required: true
+        type: string
+      device_run:
+        description: Successful Android 16 device verification run ID
+        required: true
+        type: string
 permissions:
   contents: write
   actions: read
@@ -8,41 +22,66 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      BUILD_RUN_ID: ${{ inputs.build_run }}
+      DEVICE_RUN_ID: ${{ inputs.device_run }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Require successful tests of the exact tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          import json, os, re, subprocess
+          tag = os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Expected a semantic version tag'
+          commit = subprocess.check_output(['git', 'rev-parse', '--verify', tag + '^{commit}'], text=True).strip()
+          for variable, path in [('BUILD_RUN_ID', '.github/workflows/android.yml'), ('DEVICE_RUN_ID', '.github/workflows/android-device.yml')]:
+              run_id = os.environ[variable]
+              assert run_id.isdecimal(), 'Expected a numeric run ID'
+              run = json.loads(subprocess.check_output(['gh', 'api', f'repos/{os.environ["GITHUB_REPOSITORY"]}/actions/runs/{run_id}'], text=True))
+              assert run['path'] == path, 'Unexpected verification workflow'
+              assert run['status'] == 'completed' and run['conclusion'] == 'success', 'Verification did not pass'
+              assert run['head_sha'] == commit, 'Verification does not match the tagged source'
+          gradle = subprocess.check_output(['git', 'show', tag + ':app/build.gradle.kts'], text=True)
+          assert re.search(r'versionName\s*=\s*"' + re.escape(tag[1:]) + r'"', gradle), 'APK version and tag differ'
+          print('Verified build and device test runs match', tag, commit)
+          PY
       - name: Download the APK that passed Android 16 device tests
         uses: actions/download-artifact@v4
         with:
           name: android-16-device-reports
-          run-id: 37883310191
+          run-id: ${{ inputs.device_run }}
           github-token: ${{ github.token }}
           path: dist/device
       - name: Download the successful build and unit test reports
         uses: actions/download-artifact@v4
         with:
           name: android-v0.1-debug-and-reports
-          run-id: 37883203265
+          run-id: ${{ inputs.build_run }}
           github-token: ${{ github.token }}
           path: dist/build
       - name: Prepare source, reports and checksums
         run: |
-          git archive --format=zip --output=dist/garmin-ai-coach-v0.1.0-source.zip v0.1.0
           python - <<'PY'
           from pathlib import Path
-          import hashlib, shutil, zipfile
+          import hashlib, os, shutil, subprocess, zipfile
           dist = Path('dist')
+          prefix = 'garmin-ai-coach-' + os.environ['RELEASE_TAG']
+          subprocess.run(['git', 'archive', '--format=zip', '--output=' + str(dist / (prefix + '-source.zip')), os.environ['RELEASE_TAG']], check=True)
           apks = list((dist / 'device').rglob('app-debug.apk'))
           assert len(apks) == 1, 'Expected exactly one device-tested APK'
-          shutil.copyfile(apks[0], dist / 'garmin-ai-coach-v0.1.0-debug.apk')
-          with zipfile.ZipFile(dist / 'garmin-ai-coach-v0.1.0-test-reports.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+          shutil.copyfile(apks[0], dist / (prefix + '-debug.apk'))
+          with zipfile.ZipFile(dist / (prefix + '-test-reports.zip'), 'w', zipfile.ZIP_DEFLATED) as z:
               for source in ['build', 'device']:
                   for p in (dist / source).rglob('*'):
                       if p.is_file() and p.suffix != '.bin' and any(part in ['reports', 'test-results', 'androidTest-results'] for part in p.parts):
                           z.write(p, str(p.relative_to(dist)))
-              z.write('docs/VALIDATION.md', 'VALIDATION.md')
-          files = ['garmin-ai-coach-v0.1.0-debug.apk', 'garmin-ai-coach-v0.1.0-source.zip', 'garmin-ai-coach-v0.1.0-test-reports.zip']
+              z.writestr('VALIDATION.md', subprocess.check_output(['git', 'show', os.environ['RELEASE_TAG'] + ':docs/VALIDATION.md']))
+          files = [prefix + suffix for suffix in ['-debug.apk', '-source.zip', '-test-reports.zip']]
           lines = []
           for name in files:
               h = hashlib.sha256()
@@ -56,4 +95,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release upload v0.1.0 dist/garmin-ai-coach-v0.1.0-debug.apk dist/garmin-ai-coach-v0.1.0-source.zip dist/garmin-ai-coach-v0.1.0-test-reports.zip dist/SHA256SUMS --clobber
+          gh release upload "$RELEASE_TAG" "dist/garmin-ai-coach-$RELEASE_TAG-debug.apk" "dist/garmin-ai-coach-$RELEASE_TAG-source.zip" "dist/garmin-ai-coach-$RELEASE_TAG-test-reports.zip" dist/SHA256SUMS --clobber

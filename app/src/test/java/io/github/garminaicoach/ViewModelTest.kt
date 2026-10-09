@@ -49,6 +49,67 @@ class ViewModelTest {
         model.hideData()
         assertFalse(model.state.value.accessVerified)
     }
+    @Test fun permissionCheckFinishingInBackgroundCannotRevealData() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repo = StubRepository().apply { firstCheckGate = gate }
+        val model = model(repo)
+        model.checkAccess()
+        runCurrent()
+        model.hideData()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertFalse(model.state.value.accessVerified)
+        assertFalse(model.state.value.busy)
+    }
+    @Test fun permissionResultBeforeResumeWaitsForForegroundThenRefreshes() = runTest {
+        val repo = StubRepository()
+        val model = model(repo)
+        model.refresh()
+        advanceUntilIdle()
+        assertEquals(0, repo.checks)
+        assertEquals(0, repo.refreshCount)
+        model.checkAccess()
+        advanceUntilIdle()
+        assertEquals(1, repo.refreshCount)
+        assertTrue(model.state.value.accessVerified)
+    }
+    @Test fun foregroundAccessCheckQueuedDuringClearRunsAfterClearCompletes() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repo = StubRepository().apply { clearGate = gate }
+        val model = model(repo)
+        model.checkAccess()
+        advanceUntilIdle()
+        model.clearLocalData()
+        runCurrent()
+        model.hideData()
+        repo.granted = emptySet()
+        model.checkAccess()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(2, repo.checks)
+        assertEquals(emptySet<Metric>(), model.state.value.granted)
+        assertTrue(model.state.value.accessVerified)
+        assertFalse(model.state.value.busy)
+    }
+    @Test fun foregroundReturnDuringRefreshRechecksRevokedPermission() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repo = StubRepository().apply { refreshGate = gate }
+        val model = model(repo)
+        model.checkAccess()
+        advanceUntilIdle()
+        model.refresh()
+        runCurrent()
+        model.hideData()
+        repo.granted = emptySet()
+        model.checkAccess()
+        assertFalse(model.state.value.accessVerified)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(emptySet<Metric>(), model.state.value.granted)
+        assertTrue(model.state.value.accessVerified)
+        assertFalse(model.state.value.busy)
+        assertEquals(4, repo.checks)
+    }
 }
 
 private class StubRepository : HealthRepository {
@@ -56,14 +117,17 @@ private class StubRepository : HealthRepository {
     override val snapshots = data
     var failAccess = false
     var firstCheckGate: CompletableDeferred<Unit>? = null
+    var clearGate: CompletableDeferred<Unit>? = null
+    var refreshGate: CompletableDeferred<Unit>? = null
+    var granted = setOf(Metric.STEPS)
     var checks = 0
     var refreshCount = 0
     override fun availability() = Availability.AVAILABLE
     override suspend fun checkAccess(): Set<Metric> {
         if (++checks == 1) firstCheckGate?.await()
         if (failAccess) error("test")
-        return setOf(Metric.STEPS)
+        return granted
     }
-    override suspend fun refresh() { refreshCount++ }
-    override suspend fun clearLocalData() { data.value = LocalSnapshot() }
+    override suspend fun refresh() { refreshCount++; refreshGate?.await() }
+    override suspend fun clearLocalData() { clearGate?.await(); data.value = LocalSnapshot() }
 }

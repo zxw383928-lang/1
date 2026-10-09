@@ -14,6 +14,9 @@ class MainActivitySmokeTest {
         compose.waitUntil(timeoutMillis = 30_000) {
             compose.onAllNodesWithText("Health Connect 可用").fetchSemanticsNodes().isNotEmpty()
         }
+        compose.waitUntil(timeoutMillis = 30_000) {
+            compose.onAllNodes(hasText("数据权限") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithText("数据权限").performClick()
         compose.onNodeWithTag("request-permissions").assertIsNotEnabled()
         MetricNames.forEach { compose.onNodeWithTag("select-$it").assertIsOff() }

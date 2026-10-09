@@ -6,10 +6,12 @@
 
 ## 安装
 
-在 [GitHub Releases](https://github.com/zxw383928-lang/1/releases) 下载 `garmin-ai-coach-v0.1.0-debug.apk`。这是开发签名 APK，仅用于验证；安装时允许当前浏览器或文件管理器“安装未知应用”。
+最新修订版 **V0.1.1** 修正前后台权限检查队列、清除缓存时的待处理检查、Room 多表快照一致性，以及窄屏 / 大字体布局。
+
+在 [GitHub Releases](https://github.com/zxw383928-lang/1/releases) 下载 `garmin-ai-coach-v0.1.1-debug.apk`。这是开发签名 APK，仅用于验证；安装时允许当前浏览器或文件管理器“安装未知应用”。若旧版因签名不同无法覆盖安装，见[真机安装说明](docs/DEVICE_ACCEPTANCE.md#安装前)。
 
 ```bash
-adb install -r garmin-ai-coach-v0.1.0-debug.apk
+adb install -r garmin-ai-coach-v0.1.1-debug.apk
 ```
 
 Android 9+ 可安装，compileSdk / targetSdk 36（Android 16）。Android 14+ 使用系统 Health Connect；Android 9–13 需官方组件。**ColorOS 16 的地区版本、系统模块和 Google Play 服务可能影响可用性，以应用检测结果为准。** 工作资料不支持本功能。
@@ -68,6 +70,7 @@ GitHub Actions 在 push / pull request 上编译、执行单元测试和 Lint，
 - [架构与数据流](docs/ARCHITECTURE.md)
 - [健康数据权限与隐私](docs/PERMISSIONS.md)
 - [编译、测试与真机验收](docs/VALIDATION.md)
+- [ColorOS 16 真机操作清单](docs/DEVICE_ACCEPTANCE.md)
 - [第二阶段 DeepSeek / FIT 接口设计](docs/PHASE2.md)
 - [官方文档核查记录](docs/OFFICIAL_REFERENCES.md)
 
