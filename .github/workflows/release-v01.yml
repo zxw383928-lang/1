@@ -1,0 +1,59 @@
+name: Publish verified V0.1 artifacts
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download the APK that passed Android 16 device tests
+        uses: actions/download-artifact@v4
+        with:
+          name: android-16-device-reports
+          run-id: 37883310191
+          github-token: ${{ github.token }}
+          path: dist/device
+      - name: Download the successful build and unit test reports
+        uses: actions/download-artifact@v4
+        with:
+          name: android-v0.1-debug-and-reports
+          run-id: 37883203265
+          github-token: ${{ github.token }}
+          path: dist/build
+      - name: Prepare source, reports and checksums
+        run: |
+          git archive --format=zip --output=dist/garmin-ai-coach-v0.1.0-source.zip v0.1.0
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib, shutil, zipfile
+          dist = Path('dist')
+          apks = list((dist / 'device').rglob('app-debug.apk'))
+          assert len(apks) == 1, 'Expected exactly one device-tested APK'
+          shutil.copyfile(apks[0], dist / 'garmin-ai-coach-v0.1.0-debug.apk')
+          with zipfile.ZipFile(dist / 'garmin-ai-coach-v0.1.0-test-reports.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+              for source in ['build', 'device']:
+                  for p in (dist / source).rglob('*'):
+                      if p.is_file() and p.suffix != '.bin' and any(part in ['reports', 'test-results', 'androidTest-results'] for part in p.parts):
+                          z.write(p, str(p.relative_to(dist)))
+              z.write('docs/VALIDATION.md', 'VALIDATION.md')
+          files = ['garmin-ai-coach-v0.1.0-debug.apk', 'garmin-ai-coach-v0.1.0-source.zip', 'garmin-ai-coach-v0.1.0-test-reports.zip']
+          lines = []
+          for name in files:
+              h = hashlib.sha256()
+              with (dist / name).open('rb') as f:
+                  for chunk in iter(lambda: f.read(1024 * 1024), b''):
+                      h.update(chunk)
+              lines.append(h.hexdigest() + '  ' + name)
+          (dist / 'SHA256SUMS').write_text('\n'.join(lines) + '\n')
+          PY
+      - name: Publish verified release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload v0.1.0 dist/garmin-ai-coach-v0.1.0-debug.apk dist/garmin-ai-coach-v0.1.0-source.zip dist/garmin-ai-coach-v0.1.0-test-reports.zip dist/SHA256SUMS --clobber
