@@ -61,7 +61,7 @@ sdk.dir=/your/path/to/android-sdk
 
 APK：`app/build/outputs/apk/debug/app-debug.apk`。测试报告：`app/build/reports/tests/testDebugUnitTest/index.html`；Lint：`app/build/reports/lint-results-debug.html`。
 
-GitHub Actions 在 push / pull request 上编译、执行单元测试和 Lint，并保存 APK、测试和 Lint 报告。没有自动上传任何设备健康数据的功能。发布构建与生产签名不属于 V0.1。
+GitHub Actions 在 push / pull request 上编译、执行单元测试和 Lint，并保存 APK、测试和 Lint 报告。另有手动触发的 `Android 16 device verification` 工作流，使用带 KVM 的官方 Google APIs 模拟器安装 APK、启动真实 Activity、检查官方 Health Connect 可用性并运行 Compose 测试。没有自动上传任何用户设备健康数据的功能。发布构建与生产签名不属于 V0.1。
 
 ## 文档与交付
 

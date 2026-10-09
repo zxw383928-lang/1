@@ -28,9 +28,18 @@ Debug APK：`app/build/outputs/apk/debug/app-debug.apk`；minSdk 28、targetSdk 
 
 本机准备过程中补齐 SDK/JDK、配置代理 CA 信任，并重新下载且核验了 Robolectric 测试依赖的 SHA-512。环境配置未提交到项目；没有关闭 TLS 或依赖完整性检查。
 
+GitHub Actions 云端也已通过独立编译、24 项基础测试和 Lint：[运行记录](https://github.com/zxw383928-lang/1/actions/runs/37883203265)。SDK 安装 Action 已显式指定 `platform-tools`，避免默认请求已停用的 `tools` 包。
+
 ## 设备验证进度
 
-Android 16 / API 36 Google APIs x86_64 软件模拟器已创建。开发主机没有 KVM，系统首次启动和 APK 优化较慢；安装、启动和 Compose instrumentation 验证结果在完成后补充。两项 instrumentation 测试 APK 已编译，覆盖默认不选择权限、单类型请求及不可用/缺失界面。
+本机没有 KVM；Android 16 / API 36 Google APIs x86_64 软件模拟器启动过程中出现系统进程 `DeadSystemException`，未完成安装验收，已停止该模拟器。它不是已通过的设备验证。
+
+**Android 16 / API 36 云端设备验证通过**：[运行记录](https://github.com/zxw383928-lang/1/actions/runs/37883310191)。在带 KVM 的 Google APIs x86_64 模拟器上实际安装 APK，三项 instrumentation 测试全部通过：
+
+- `MainActivitySmokeTest` 启动真实应用，确认官方 Health Connect 可用性检查完成、Room 初始化成功，并打开默认不选择任何类型的权限页面。
+- `CoachUiTest` 确认仅勾步数时回调只请求步数；不可用状态有解释，缺失值显示 `—`。
+
+设备测试没有注入用户健康数据；两项纯 UI 测试使用明确的测试状态，真实 MainActivity 测试使用正式数据源。系统授权弹窗的完整交互、真实 Garmin 写入记录的读取和 ColorOS 厂商行为，仍需下表的真机验收，不能由这三项测试替代。
 
 ## ColorOS 16 真机验收步骤
 
